@@ -1,0 +1,13 @@
+{
+  "name": "boba-chummy-whatsapp-webhook",
+  "version": "1.0.0",
+  "description": "Webhook for WhatsApp Cloud API to receive order-to-car messages",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0"
+  }
+}
