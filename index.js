@@ -207,6 +207,9 @@ async function sendTextMessage(to, text) {
 
 // Webhook POST handler
 app.post('/webhook', async (req, res) => {
+  console.log('❇️  Incoming webhook payload:', JSON.stringify(req.body, null, 2));
+  res.sendStatus(200);
+
   const entries = req.body.entry || [];
   for (const entry of entries) {
     const changes = entry.changes || [];
