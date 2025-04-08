@@ -9,9 +9,9 @@ app.use(express.json());
 const VERIFY_TOKEN = "boba_order_token";
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const CATALOG_LINK = "https://wa.me/c/234XXXXXXXXXX"; // Replace with actual catalog link
+const CATALOG_LINK = "https://wa.me/c/234XXXXXXXXXX"; // Replace with actual WhatsApp Catalog link
 
-let customers = {}; // { phone: { name, stamps, type, step, data } }
+let customers = {}; // Store customer data by phone number
 
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -45,20 +45,12 @@ app.post("/webhook", async (req, res) => {
       let reply = "";
 
       const sendCatalog = () =>
-        `Here’s our Boba Chummy menu! 🧋✨
-${CATALOG_LINK}
-
-Would you like to:
-- Order to Car 🚗
-- Pick Up 🏃‍♀️
-- Delivery 🛵`;
+        `Here’s our Boba Chummy menu! 🧋✨\n${CATALOG_LINK}\n\nWould you like to:\n- Order to Car 🚗\n- Pick Up 🏃‍♀️\n- Delivery 🛵`;
 
       const isFirstTime = !customer.name;
 
       if (isFirstTime && (lowerMsg.includes("hi") || lowerMsg.includes("hello") || lowerMsg.includes("hey"))) {
-        reply = `👋 Hey sweet soul! Welcome to *Boba Chummy* — Abuja’s home of bubble tea, waffles & love notes on cups 💌
-
-${sendCatalog()}`;
+        reply = `👋 Hey sweet soul! Welcome to *Boba Chummy* — Abuja’s home of bubble tea, waffles & love notes on cups 💌\n\n${sendCatalog()}`;
         customer.step = 0;
       } else if (lowerMsg.includes("menu") || lowerMsg.includes("catalog") || lowerMsg.includes("open")) {
         reply = sendCatalog();
@@ -67,53 +59,32 @@ ${sendCatalog()}`;
         if (lowerMsg.includes("order to car")) {
           customer.type = "car";
           customer.step = 1;
-          reply = "🚗 Sweet! Please send:
-1. Your Full Name
-2. Car Color
-3. Plate Number
-4. Your Order
-5. Message for the Cup 💌";
+          reply = "🚗 Sweet! Please send:\n1. Your Full Name\n2. Car Color\n3. Plate Number\n4. Your Order\n5. Message for the Cup 💌";
         } else if (lowerMsg.includes("pickup") || lowerMsg.includes("pick up")) {
           customer.type = "pickup";
           customer.step = 1;
-          reply = "🏃‍♀️ Let’s go! Please send:
-1. Your Full Name
-2. Your Order
-3. Pickup Branch
-4. Custom Note for the Cup 💌";
+          reply = "🏃‍♀️ Let’s go! Please send:\n1. Your Full Name\n2. Your Order\n3. Pickup Branch\n4. Custom Note for the Cup 💌";
         } else if (lowerMsg.includes("delivery")) {
           customer.type = "delivery";
           customer.step = 1;
-          reply = "🛵 Alright! Please send:
-1. Your Name
-2. Address
-3. Landmark
-4. Phone Number
-5. Your Order
-6. Message for the Cup 💌";
+          reply = "🛵 Alright! Please send:\n1. Your Name\n2. Address\n3. Landmark\n4. Phone Number\n5. Your Order\n6. Message for the Cup 💌";
         }
       } else if (customer.step === 1) {
-        const lines = msgBody.split("
-");
+        const lines = msgBody.split("\n");
         const type = customer.type;
 
         let complete = false;
         if (type === "car" && lines.length >= 5) {
           [customer.name, customer.data.carColor, customer.data.plate, customer.data.order, customer.data.note] = lines;
-          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be delivered to your ${customer.data.carColor} car (${customer.data.plate}).
-💌 Cup note: "${customer.data.note}"`;
+          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be delivered to your ${customer.data.carColor} car (${customer.data.plate}).\n💌 Cup note: \"${customer.data.note}\"`;
           complete = true;
         } else if (type === "pickup" && lines.length >= 4) {
           [customer.name, customer.data.order, customer.data.branch, customer.data.note] = lines;
-          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be ready for pick up at ${customer.data.branch}.
-💌 Cup note: "${customer.data.note}"`;
+          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be ready for pick up at ${customer.data.branch}.\n💌 Cup note: \"${customer.data.note}\"`;
           complete = true;
         } else if (type === "delivery" && lines.length >= 6) {
           [customer.name, customer.data.address, customer.data.landmark, customer.data.phone, customer.data.order, customer.data.note] = lines;
-          reply = `✅ Order confirmed for ${customer.name}!
-🛵 Delivery to: ${customer.data.address}, near ${customer.data.landmark}.
-📞 Contact: ${customer.data.phone}
-💌 Cup note: "${customer.data.note}"`;
+          reply = `✅ Order confirmed for ${customer.name}!\n🛵 Delivery to: ${customer.data.address}, near ${customer.data.landmark}.\n📞 Contact: ${customer.data.phone}\n💌 Cup note: \"${customer.data.note}\"`;
           complete = true;
         } else {
           reply = "⚠️ Please send all the requested details in the format provided.";
@@ -123,34 +94,18 @@ ${sendCatalog()}`;
           customer.stamps += 1;
           customer.step = 0;
 
-          // Loyal-Tea logic
-          if (customer.stamps === 3) reply += "
-🎉 You’ve earned a FREE topping on your next order!";
-          else if (customer.stamps === 5) reply += "
-🎊 5 stamps! Enjoy 5% off your next order!";
-          else if (customer.stamps === 8) reply += "
-💪 8 stamps! Keep going — you’re close to a reward!";
-          else if (customer.stamps === 10) reply += "
-🌟 10 stamps! Your next (11th) drink is FREE! 🎁";
+          if (customer.stamps === 3) reply += "\n🎉 You’ve earned a FREE topping on your next order!";
+          else if (customer.stamps === 5) reply += "\n🎊 5 stamps! Enjoy 5% off your next order!";
+          else if (customer.stamps === 8) reply += "\n💪 8 stamps! Keep going — you’re close to a reward!";
+          else if (customer.stamps === 10) reply += "\n🌟 10 stamps! Your next (11th) drink is FREE! 🎁";
 
-          // Cross-sell
-          reply += "
-
-🔥 Would you like to add a soft serve, waffle, or seasonal topping to your order?";
+          reply += "\n\n🔥 Would you like to add a soft serve, waffle, or seasonal topping to your order?";
         }
       } else if (customer.name) {
-        reply = `Welcome back ${customer.name}! 👋
-Would you like to:
-- Order to Car 🚗
-- Pick Up 🏃‍♀️
-- Delivery 🛵
-Or just type *menu* to see what’s new 🍓`;
+        reply = `Welcome back ${customer.name}! 👋\nWould you like to:\n- Order to Car 🚗\n- Pick Up 🏃‍♀️\n- Delivery 🛵\nOr just type *menu* to see what’s new 🍓`;
         customer.step = 0;
       } else {
-        reply = `Hi there! I’m your Boba Chummy assistant 🧋. Want to see the menu? Type *menu* or choose:
-- Order to Car
-- Pick Up
-- Delivery`;
+        reply = "Hi there! I’m your Boba Chummy assistant 🧋. Want to see the menu? Type *menu* or choose:\n- Order to Car\n- Pick Up\n- Delivery";
       }
 
       customers[from] = customer;
