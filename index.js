@@ -41,8 +41,7 @@ app.post("/webhook", async (req, res) => {
       let responseText = "";
 
       if (lower.includes("open") || lower.includes("close") || lower.includes("what time")) {
-        responseText = "⏰ Our Guzape branch is open daily from 9:00am–10:00pm.
-Nile branch opens 10:00am–6:30pm, but we’re closed on Sundays.";
+        responseText = "⏰ Our Guzape branch is open daily from 9:00am-10:00pm. Nile branch opens 10:00am-6:30pm and is closed on Sundays.";
       } else if (lower.includes("deliver") && (lower.includes("gwarinpa") || lower.includes("wuse") || lower.includes("asokoro") || lower.includes("abuja"))) {
         responseText = "🚚 Yes! Our Guzape branch delivers to all parts of Abuja.";
       } else if (lower.includes("menu") || lower.includes("milk tea") || lower.includes("sticky") || lower.includes("fruit tea") || lower.includes("ice cream")) {
@@ -53,7 +52,6 @@ Nile branch opens 10:00am–6:30pm, but we’re closed on Sundays.";
         responseText = "🧋 Thanks for reaching out to Boba Chummy! Want to check the menu or place an order? Just say 'menu' or type your drink!";
       }
 
-      // send response back via WhatsApp
       try {
         await axios.post(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
           messaging_product: "whatsapp",
