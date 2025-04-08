@@ -1,6 +1,4 @@
 
-...
-
 if (user.step === 'chooseBranch' && user.lastOrder && !text.toLowerCase().includes('order') && user.orders.length === 0) {
   if (text.toLowerCase().includes('repeat')) {
     user.orders = [...user.lastOrder];
@@ -25,5 +23,3 @@ if (user.step === 'chooseBranch' && user.lastOrder && !text.toLowerCase().includ
     );
   }
 }
-
-...
