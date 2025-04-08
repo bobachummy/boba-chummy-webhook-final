@@ -2,229 +2,161 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
+
 const app = express();
 app.use(bodyParser.json());
 
-// --- Environment Variables ---
-const VERIFY_TOKEN      = process.env.WA_VERIFY_TOKEN;
-const ACCESS_TOKEN      = process.env.WA_ACCESS_TOKEN;
-const PHONE_NUMBER_ID   = process.env.WA_PHONE_NUMBER_ID; // Your WhatsApp Business phone number ID
+// In-memory store for demo purposes
+const users = new Map();
 
-// --- In-memory stores (replace with DB in production) ---
-const sessions = {}; // { userId: { name, branch, orderType, orderItems: [], loyaltyCount, isNew, awaitingMore, awaitingPayment } }
-const branches = ['Guzape', 'Wuse', 'Asokoro'];
-
-// Static product catalog
-const products = {
-  drinks: [
-    { name: 'Classic Milk Tea', price: 5 },
-    { name: 'Taro Milk Tea', price: 6 },
-    { name: 'Matcha Latte', price: 6.5 },
-  ],
-  waffles: [
-    { name: 'Belgian Waffle', price: 4 },
-    { name: 'Chocolate Waffle', price: 4.5 },
-  ],
-  toppings: [
-    { name: 'Boba Pearls', price: 1 },
-    { name: 'Pudding', price: 1.5 },
-  ],
-  combos: [
-    { name: 'Drink + Waffle', price: 8 },
-    { name: 'Drink + Waffle + Topping', price: 9 },
-  ]
+// Static price list
+const PRICE_LIST = {
+  'classic milk tea': 500,
+  'taro milk tea': 600,
+  'matcha latte': 700,
+  'boba waffles': 400,
+  'extra boba': 100,
+  'fruit jelly': 150,
 };
 
-// Loyalty thresholds
-const loyaltyRewards = {
-  3: 'free topping',
-  5: '5% discount',
-  8: 'keep going',
-  10: 'free drink on next order'
+// Branch hours
+const BRANCH_HOURS = {
+  guzape: { open: 9, close: 22 },
+  wuse:  { open: 9, close: 22 },
 };
 
-// Utility: time-aware greeting
-function getGreeting(timestamp) {
-  const hour = new Date(timestamp).getHours();
+// Helpers
+function getTimeGreeting() {
+  const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
+  if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
-
-// Detect order type from text
+function isWithinHours(branch) {
+  const h = BRANCH_HOURS[branch.toLowerCase()];
+  if (!h) return false;
+  const hour = new Date().getHours();
+  return hour >= h.open && hour < h.close;
+}
+function detectBranch(text) {
+  for (let b of Object.keys(BRANCH_HOURS)) {
+    if (text.toLowerCase().includes(b)) return b;
+  }
+  return null;
+}
 function detectOrderType(text) {
   text = text.toLowerCase();
   if (text.includes('delivery')) return 'delivery';
-  if (text.includes('pick up') || text.includes('pickup')) return 'pickup';
-  if (text.includes('order to car')) return 'order to car';
+  if (text.includes('pickup') || text.includes('pick up')) return 'pickup';
+  if (text.includes('car') || text.includes('curbside')) return 'car';
   return null;
 }
 
-// Smart delivery location reply
-function handleLocation(branch) {
-  if (branch.toLowerCase() === 'guzape') {
-    return 'Yes! We deliver to all of Abuja 🚗✨';
-  }
-  return `We deliver to and around ${branch}.`;
-}
+// Loyalty thresholds
+const LOYALTY_REWARDS = [
+  { stamps: 3,  reward: 'a free topping' },
+  { stamps: 5,  reward: '5% off your next order' },
+  { stamps: 10, reward: 'a free drink on your next visit' },
+];
 
-// Cross-sell suggestions
-function suggestCrossSell(items) {
-  const suggestions = [];
-  if (!items.find(i => i.type === 'waffle')) suggestions.push('waffles');
-  if (!items.find(i => i.type === 'topping')) suggestions.push('toppings');
-  if (suggestions.length) {
-    return `Would you like to add any ${suggestions.join(' or ')}?`;
-  }
-  return null;
-}
+app.post('/webhook', (req, res) => {
+  const msg    = req.body.message;
+  const userId = req.body.userId;
+  if (!msg || !userId) return res.sendStatus(400);
 
-// Core message processing logic
-function processMessage(userId, message, timestamp) {
-  if (!sessions[userId]) {
-    sessions[userId] = {
-      isNew: true,
-      loyaltyCount: 0,
-      orderItems: [],
-      awaitingMore: false,
-      awaitingPayment: false
-    };
-  }
-  const session = sessions[userId];
-  let reply = '';
-
-  // Greeting
-  if (session.isNew) {
-    session.isNew = false;
-    return `${getGreeting(timestamp)}! Welcome to Boba Machine. What's your name?`;
+  let user = users.get(userId);
+  if (!user) {
+    user = { name:null, branch:null, orderType:null, stamps:0, orders:[], step:'askName' };
+    users.set(userId, user);
+    return res.json({ reply:`${getTimeGreeting()}! Welcome to Boba Chummy. What’s your name?` });
   }
 
-  // Capture name
-  if (!session.name) {
-    session.name = message.trim();
-    return `Hi ${session.name}! Which branch are you ordering from? (${branches.join(', ')})`;
-  }
+  const text = msg.trim();
 
-  // Capture branch
-  if (!session.branch) {
-    const branch = branches.find(b => b.toLowerCase() === message.trim().toLowerCase());
-    if (!branch) {
-      return `Sorry, we don't have that branch. Please choose one: ${branches.join(', ')}`;
-    }
-    session.branch = branch;
-    return `${handleLocation(branch)}
-What would you like to do today? (Order, Delivery, Pick Up)`;
-  }
-
-  // Detect order type
-  if (!session.orderType) {
-    const type = detectOrderType(message);
-    if (!type) {
-      return 'Do you want Delivery, Pick Up, or Order to Car?';
-    }
-    session.orderType = type;
-    if (session.loyaltyCount > 0) {
-      return 'Welcome back! Want your usual order again or check the catalog?';
-    }
-    return `Great, ${session.orderType}. What would you like to order?`;
-  }
-
-  // Handle returning customer "usual order"
-  if (message.toLowerCase().includes('usual')) {
-    session.awaitingPayment = true;
-    return 'Re-ordering your usual: [Mocked Items]. Shall I proceed?';
-  }
-
-  // Ordering logic
-  if (!session.awaitingPayment) {
-    if (!session.awaitingMore) {
-      session.awaitingMore = true;
-      session.orderItems.push({ name: message.trim(), type: 'drink' });
-      return `Added ${message.trim()} to your order. ${suggestCrossSell(session.orderItems) || "Anything else? Say 'that's all' when finished."}`;
-    }
-    if (message.toLowerCase().includes("that's all")) {
-      session.awaitingPayment = true;
-      const total = session.orderItems.reduce((sum, item) => {
-        const category = products.drinks.concat(products.waffles, products.toppings, products.combos);
-        const prod = category.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-        return sum + (prod ? prod.price : 0);
-      }, 0);
-      return `Your total is $${total.toFixed(2)}. ${session.orderType === 'delivery' ? 'Do you want to pay on delivery?' : 'How would you like to pay?'}`;
-    }
-    session.orderItems.push({ name: message.trim(), type: 'add-on' });
-    return `Added ${message.trim()}. Anything else? Say 'that's all' when finished.`;
-  }
-
-  // Payment flow
-  if (session.awaitingPayment) {
-    if (session.orderType === 'delivery' && message.toLowerCase().includes('yes')) {
-      session.awaitingPayment = false;
-      session.awaitingMore = false;
-      return 'Please send payment proof when ready.';
-    }
-    session.loyaltyCount += 1;
-    let resp = 'Payment confirmed! 🎉 Your order is placed.';
-    const reward = loyaltyRewards[session.loyaltyCount];
-    if (reward) resp += ` You earned a loyalty reward: ${reward}!`;
-    // Reset order state
-    session.orderType = null;
-    session.branch = null;
-    session.orderItems = [];
-    return resp;
-  }
-
-  // Fallback
-  return "Sorry, I didn't get that. Can you rephrase?";
-}
-
-// WhatsApp webhook verification
-app.get('/webhook', (req, res) => {
-  const mode      = req.query['hub.mode'];
-  const token     = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('Webhook verified');
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-});
-
-// Send message via WhatsApp Cloud API
-async function sendTextMessage(to, text) {
-  const url = `https://graph.facebook.com/v16.0/${PHONE_NUMBER_ID}/messages?access_token=${ACCESS_TOKEN}`;
-  const body = {
-    messaging_product: 'whatsapp',
-    to,
-    text: { body: text }
-  };
-  await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-}
-
-// Webhook POST handler
-app.post('/webhook', async (req, res) => {
-  const entries = req.body.entry || [];
-  for (const entry of entries) {
-    const changes = entry.changes || [];
-    for (const change of changes) {
-      const messages = change.value.messages || [];
-      for (const msg of messages) {
-        const from = msg.from; // sender's WhatsApp ID
-        const text = msg.text && msg.text.body;
-        const timestamp = msg.timestamp * 1000;
-        if (text) {
-          const reply = processMessage(from, text, timestamp);
-          await sendTextMessage(from, reply);
-        }
+  // Hours query
+  if (/open|hours|time/i.test(text)) {
+    if (user.branch) {
+      const h = BRANCH_HOURS[user.branch];
+      if (isWithinHours(user.branch)) {
+        return res.json({ reply:`⏰ Our ${user.branch.charAt(0).toUpperCase()+user.branch.slice(1)} branch is open daily from ${h.open}:00–${h.close}:00.` });
+      } else {
+        return res.json({ reply:`Sorry, our ${user.branch} branch is closed right now. We’re open ${h.open}:00–${h.close}:00.` });
       }
     }
+    return res.json({ reply:`We’re open daily from 9:00–22:00 across all branches. Which branch are you ordering from?` });
   }
-  res.sendStatus(200);
+
+  switch (user.step) {
+    case 'askName':
+      user.name = text; user.step = 'askBranch';
+      return res.json({ reply:`Hi ${user.name}! Which branch would you like? (Guzape or Wuse)` });
+
+    case 'askBranch':
+      const branch = detectBranch(text);
+      if (!branch) return res.json({ reply:`Please choose Guzape or Wuse.` });
+      user.branch = branch; user.step = 'askOrderType';
+      return res.json({ reply:`Great! ${branch.charAt(0).toUpperCase()+branch.slice(1)} branch. Delivery, pickup, or car?` });
+
+    case 'askOrderType':
+      const type = detectOrderType(text);
+      if (!type) return res.json({ reply:`Delivery, pickup, or car?` });
+      user.orderType = type; user.step = 'takingOrder';
+      return res.json({ reply:`Perfect, ${type}. What would you like to order today?` });
+
+    case 'takingOrder':
+      if (/that'?s all|done/i.test(text)) {
+        user.step = 'crossSell';
+        return res.json({ reply:`Got it! Add waffles, extra toppings, or combos?` });
+      }
+      user.orders.push(text);
+      return res.json({ reply:`Added "${text}". Anything else? (Say "that's all" when finished.)` });
+
+    case 'crossSell':
+      if (/yes|add/i.test(text)) {
+        user.step = 'takingOrder';
+        return res.json({ reply:`Great! What would you like to add?` });
+      }
+      user.step = 'confirmOrder';
+      const summary = user.orders.map((o,i)=>`${i+1}. ${o}`).join('\n');
+      return res.json({ reply:`Here’s your order:\n${summary}\nShall I proceed to payment?` });
+
+    case 'confirmOrder':
+      if (/no|cancel/i.test(text)) {
+        user.orders=[]; user.step='takingOrder';
+        return res.json({ reply:`Order canceled. What would you like instead?` });
+      }
+      user.step = 'payment';
+      const total = user.orders.reduce((s,item)=>
+        s + (PRICE_LIST[item.toLowerCase()]||0),0
+      );
+      let r = `Your total is ₦${total}. `;
+      r += user.orderType==='delivery'
+         ? `Pay delivery on arrival?`
+         : `Please send payment proof when ready.`;
+      return res.json({ reply:r });
+
+    case 'payment':
+      if (user.orderType==='delivery' && /yes|sure/i.test(text)) {
+        user.step='awaitProof';
+        return res.json({ reply:`Great! We’ll collect on arrival. Now send payment proof.` });
+      }
+      if (/proof|sent|paid/i.test(text)) {
+        user.step='complete';
+        user.stamps++;
+        let lm = `You’ve earned a stamp! Total stamps: ${user.stamps}.`;
+        LOYALTY_REWARDS.forEach(rw=>{
+          if(user.stamps===rw.stamps) lm+=` Congrats—${rw.reward}!`;
+        });
+        return res.json({ reply:`Payment confirmed! 🎉\n${lm}\nThanks for ordering, ${user.name}!` });
+      }
+      return res.json({ reply:`Waiting for your payment proof.` });
+
+    default:
+      user.step='askOrderType';
+      return res.json({ reply:`Your usual order or check catalog?` });
+  }
 });
 
+// Bind to the port Render provides (or 3000 locally)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Webhook with full bot logic running on port ${PORT}`));
