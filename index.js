@@ -34,6 +34,11 @@ const BRANCH_HOURS = {
 
 const LOYALTY_GOAL = 10; // stamps per month for free drink
 
+const ACCOUNT_DETAILS = {
+  guzape: 'Account Name: Boba Chummy Guzape\nAccount Number: 1234567890\nBank: XYZ Bank',
+  'nile uni': 'Account Name: Boba Chummy Nile Uni\nAccount Number: 0987654321\nBank: ABC Bank'
+};
+
 // Helpers
 function getTimeGreeting() {
   const h = new Date().getHours();
@@ -56,7 +61,7 @@ function branchHoursText(branch) {
   if (!b) return '';
   const open = b.open;
   const close = b.close;
-  const days = b.days.includes(0) ? 'daily' : 'Mon–Sun except Sunday';
+  const days = b.days.includes(0) ? 'daily' : 'Mon–Sat';
   return `${days} ${open}:00–${close}:00`;
 }
 
@@ -119,17 +124,9 @@ async function handleMessage(userId, text) {
 
   if (!user) {
     // New user
-    user = {
-      name: null,
-      branch: null,
-      orderType: null,
-      orders: [],
-      stamps: 0,
-      step: 'chooseBranch'
-    };
+    user = { name: null, branch: null, orderType: null, orders: [], stamps: 0, step: 'chooseBranch' };
     users.set(userId, user);
-    return `${greeting}! Welcome to Boba Chummy 🎉
-Which branch are you ordering from? Guzape or Nile Uni?`;
+    return `${greeting}! Welcome to Boba Chummy 🎉\nWhich branch are you ordering from? Guzape or Nile Uni?`;
   }
 
   // Recognize returning customer
@@ -140,9 +137,7 @@ Which branch are you ordering from? Guzape or Nile Uni?`;
   // Branch selection
   if (user.step === 'chooseBranch') {
     const branch = detectBranch(text);
-    if (!branch) {
-      return `Please choose a branch: Guzape or Nile Uni.`;
-    }
+    if (!branch) return `Please choose a branch: Guzape or Nile Uni.`;
     user.branch = branch;
     user.step = 'chooseOrderType';
     if (!isBranchOpen(branch)) {
@@ -154,9 +149,7 @@ Which branch are you ordering from? Guzape or Nile Uni?`;
   // Order type selection
   if (user.step === 'chooseOrderType') {
     const type = detectOrderType(text);
-    if (!type) {
-      return `Please let me know: Order to Car, Delivery, or Pick Up.`;
-    }
+    if (!type) return `Please let me know: Order to Car, Delivery, or Pick Up.`;
     user.orderType = type;
     user.step = 'takingOrder';
     return `Perfect, ${type === 'car' ? 'Order to Car' : type.charAt(0).toUpperCase()+type.slice(1)}. What would you like to have? You can also view our catalog here: https://bobachummy.com/catalog`;
@@ -166,62 +159,78 @@ Which branch are you ordering from? Guzape or Nile Uni?`;
   if (user.step === 'takingOrder') {
     if (/that'?s all|done/i.test(text)) {
       user.step = 'confirmOrder';
-      return `Thanks! I have: ${user.orders.join(', ')}. Would you like to add waffles or extra toppings?`;
+      return `Thanks! I have: ${user.orders.join(', ')}. Please wait while we confirm your total cost.`;
     }
-    // Add item
     user.orders.push(text);
     return `Added "${text}". Anything else? Say "that's all" when finished.`;
   }
 
-  // Cross-selling prompt
+  // Confirm order: wait for staff to send total
   if (user.step === 'confirmOrder') {
-    if (/yes|add/i.test(text)) {
-      user.step = 'takingOrder';
-      return `Great! What would you like to add?`;
-    }
-    if (/no|done/i.test(text)) {
-      // Calculate total
-      const total = user.orders.reduce((sum, item) => {
-        const key = item.toLowerCase();
-        return sum + (PRICE_LIST[key] || 0);
-      }, 0);
+    const match = text.match(/^total\s+(\d+)/i);
+    if (match) {
+      const amount = match[1];
+      user.total = amount;
       user.step = 'awaitPayment';
-      return `Your total is ₦${total}. Please send payment proof when you're ready.`;
+      const account = ACCOUNT_DETAILS[user.branch];
+      return `Your total is ₦${amount}. Please pay to:\n${account}\nSend proof when ready.`;
     }
-    return `Would you like to add waffles, extra toppings, or proceed to payment?`;
+    if (/no|cancel/i.test(text)) {
+      user.orders = [];
+      user.step = 'takingOrder';
+      return `Order canceled. What would you like instead?`;
+    }
+    return `Waiting for staff to send total. Staff, please type 'total <amount>'.`;
   }
 
   // Await payment proof
   if (user.step === 'awaitPayment') {
     if (/proof|sent|paid/i.test(text)) {
+      user.step = 'awaitStaffConfirm';
+      return `Payment proof received! Our staff will confirm shortly. Please wait...`;
+    }
+    return `I'm waiting for your payment proof. Please send it when ready.`;
+  }
+
+  // Await staff confirmation
+  if (user.step === 'awaitStaffConfirm') {
+    if (/confirm/i.test(text)) {
       user.step = 'completed';
       // Loyalty stamp
       user.stamps++;
       let loyaltyMsg = `You have ${user.stamps} LOYAL-TEA stamps.`;
       if (user.stamps >= LOYALTY_GOAL) {
         loyaltyMsg += ` 🎉 Congrats! You've earned a free drink. Use it within this month.`;
-        user.stamps = 0; // reset after reward
+        user.stamps = 0;
       }
-      // Confirm and ETA
-      return `Payment confirmed! ✅
-${loyaltyMsg}
-Thanks, ${user.name || 'there'}! Your order is being prepared and will be ready shortly. ETA: 10–15 minutes.`;
+      // Confirm payment and ETA
+      const confirmMsg = `Payment confirmed! ✅\n${loyaltyMsg}\nThanks, ${user.name || 'there'}! Your order is being prepared and will be ready shortly. ETA: 10–15 minutes.`;
+      // If car order, proceed to arrival
+      if (user.orderType === 'car') {
+        user.step = 'awaitArrival';
+        return confirmMsg + `\n${greeting}, are you at the car park or on the way?`;
+      }
+      // Pickup or delivery
+      user.step = 'done';
+      if (user.orderType === 'pickup') {
+        return confirmMsg + `\nYour order will be ready for pickup at our ${user.branch.charAt(0).toUpperCase()+user.branch.slice(1)} counter.`;
+      }
+      return confirmMsg + `\nYour order is on its way! 🚚 Thank you for choosing Boba Chummy.`;
     }
-    return `I'm waiting for your payment proof. Please send it when ready.`;
+    return `Awaiting staff confirmation. Staff, please type 'confirm' when payment is verified.`;
   }
 
-  // Completed order follow-up
-  if (user.step === 'completed') {
-    // After confirmation, send ready notification
-    user.step = 'done';
-    if (user.orderType === 'car') {
-      return `Your order is ready! 🚗 Please pull up to our ${user.branch.charAt(0).toUpperCase()+user.branch.slice(1)} pickup window and show this message.`;
+  // Completed order follow-up for car orders
+  if (user.step === 'awaitArrival') {
+    if (/on the way/i.test(text)) {
+      user.step = 'awaitHere';
+      return `No problem—when you arrive, please type 'I'm here' and we'll bring your order out.`;
     }
-    if (user.orderType === 'pickup') {
-      return `Your order is ready for pickup at our ${user.branch.charAt(0).toUpperCase()+user.branch.slice(1)} counter. Enjoy!`;
+    if (/here|i'?m here/i.test(text)) {
+      user.step = 'done';
+      return `Great! We'll bring your order out to your car shortly. Thank you for choosing Boba Chummy!`;
     }
-    // delivery
-    return `Your order is on its way! 🚚 We'll deliver to you ASAP. Thanks for choosing Boba Chummy.`;
+    return `Are you at the car park or on the way?`;
   }
 
   // Fallback
