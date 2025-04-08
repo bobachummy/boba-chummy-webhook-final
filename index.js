@@ -38,9 +38,9 @@ app.post('/webhook', async (req, res) => {
   const from = msg?.from;
   const text = msg?.text?.body || '';
 
-  if (!from) {
-    console.warn('⚠️ No phone number detected in incoming message.');
-    return res.sendStatus(400);
+  if (!msg || !from) {
+    console.warn('⚠️ No message or phone number found in webhook payload.');
+    return res.sendStatus(200);
   }
 
   let user = users.get(from);
