@@ -209,7 +209,7 @@ function handleBotMessage(userId, message) {
 // Send via WhatsApp Cloud API
 async function sendWhatsApp(to, text) {
   console.log('➡️ sendWhatsApp called with to:', to, 'text:', text);
-  const url = \`https://graph.facebook.com/v17.0/\${PHONE_NUMBER_ID}/messages\`;
+  const url = 'https://graph.facebook.com/v17.0/' + PHONE_NUMBER_ID + '/messages';
   const body = { messaging_product: 'whatsapp', to, text: { body: text } };
   try {
     const res = await fetch(url, {
