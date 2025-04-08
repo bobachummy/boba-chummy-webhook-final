@@ -1,4 +1,3 @@
-cd ~/Downloads/boba_chummy_webhook_fixed_final
 # Overwrite index.js with whatever is in your clipboard
 pbpaste > index.js
 # Stage, commit, and push
