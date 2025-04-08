@@ -38,6 +38,11 @@ app.post('/webhook', async (req, res) => {
   const from = msg?.from;
   const text = msg?.text?.body || '';
 
+  if (!from) {
+    console.warn('⚠️ No phone number detected in incoming message.');
+    return res.sendStatus(400);
+  }
+
   let user = users.get(from);
   if (!user) {
     user = { name: null, lastOrder: [], orders: [], step: 'chooseBranch', stamps: 0 };
