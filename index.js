@@ -9,9 +9,35 @@ app.use(express.json());
 const VERIFY_TOKEN = "boba_order_token";
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const CATALOG_LINK = "https://wa.me/c/234XXXXXXXXXX"; // Replace with actual WhatsApp Catalog link
 
-let customers = {}; // Store customer data by phone number
+const NILE_ACCOUNT = "5775651915 (Moniepoint)";
+const GUZAPE_ACCOUNT = "5985829218 (Moniepoint)";
+const CATALOG_LINK = "https://wa.me/c/234XXXXXXXXXX"; // Replace with real link
+
+let customers = {}; // Stores user sessions by number
+let orders = {}; // Store full orders
+let lastOrder = {}; // For reorder functionality
+
+const sendWhatsApp = async (to, message) => {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        text: { body: message }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  } catch (err) {
+    console.error("Send error:", err.response?.data || err.message);
+  }
+};
 
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -28,104 +54,150 @@ app.get("/webhook", (req, res) => {
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object) {
-    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    const from = message?.from;
-    const msgBody = message?.text?.body?.trim();
+    const entry = body.entry?.[0]?.changes?.[0]?.value;
+    const msg = entry?.messages?.[0];
+    const from = msg?.from;
+    const text = msg?.text?.body?.trim();
+    const name = entry?.contacts?.[0]?.profile?.name || "Customer";
 
-    if (from && msgBody) {
-      const lowerMsg = msgBody.toLowerCase();
-      let customer = customers[from] || {
-        name: null,
-        stamps: 0,
-        type: "",
-        step: 0,
-        data: {}
-      };
+    if (!from || !text) return res.sendStatus(200);
 
-      let reply = "";
+    const user = customers[from] || {
+      name,
+      branch: "",
+      state: "start",
+      orderType: "",
+      data: {},
+      stamps: 0
+    };
 
-      const sendCatalog = () =>
-        `Here’s our Boba Chummy menu! 🧋✨\n${CATALOG_LINK}\n\nWould you like to:\n- Order to Car 🚗\n- Pick Up 🏃‍♀️\n- Delivery 🛵`;
+    let response = "";
+    const lower = text.toLowerCase();
 
-      const isFirstTime = !customer.name;
-
-      if (isFirstTime && (lowerMsg.includes("hi") || lowerMsg.includes("hello") || lowerMsg.includes("hey"))) {
-        reply = `👋 Hey sweet soul! Welcome to *Boba Chummy* — Abuja’s home of bubble tea, waffles & love notes on cups 💌\n\n${sendCatalog()}`;
-        customer.step = 0;
-      } else if (lowerMsg.includes("menu") || lowerMsg.includes("catalog") || lowerMsg.includes("open")) {
-        reply = sendCatalog();
-        customer.step = 0;
-      } else if (["order to car", "pickup", "pick up", "delivery"].some(kw => lowerMsg.includes(kw))) {
-        if (lowerMsg.includes("order to car")) {
-          customer.type = "car";
-          customer.step = 1;
-          reply = "🚗 Sweet! Please send:\n1. Your Full Name\n2. Car Color\n3. Plate Number\n4. Your Order\n5. Message for the Cup 💌";
-        } else if (lowerMsg.includes("pickup") || lowerMsg.includes("pick up")) {
-          customer.type = "pickup";
-          customer.step = 1;
-          reply = "🏃‍♀️ Let’s go! Please send:\n1. Your Full Name\n2. Your Order\n3. Pickup Branch\n4. Custom Note for the Cup 💌";
-        } else if (lowerMsg.includes("delivery")) {
-          customer.type = "delivery";
-          customer.step = 1;
-          reply = "🛵 Alright! Please send:\n1. Your Name\n2. Address\n3. Landmark\n4. Phone Number\n5. Your Order\n6. Message for the Cup 💌";
-        }
-      } else if (customer.step === 1) {
-        const lines = msgBody.split("\n");
-        const type = customer.type;
-
-        let complete = false;
-        if (type === "car" && lines.length >= 5) {
-          [customer.name, customer.data.carColor, customer.data.plate, customer.data.order, customer.data.note] = lines;
-          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be delivered to your ${customer.data.carColor} car (${customer.data.plate}).\n💌 Cup note: \"${customer.data.note}\"`;
-          complete = true;
-        } else if (type === "pickup" && lines.length >= 4) {
-          [customer.name, customer.data.order, customer.data.branch, customer.data.note] = lines;
-          reply = `✅ Thanks ${customer.name}! Your ${customer.data.order} will be ready for pick up at ${customer.data.branch}.\n💌 Cup note: \"${customer.data.note}\"`;
-          complete = true;
-        } else if (type === "delivery" && lines.length >= 6) {
-          [customer.name, customer.data.address, customer.data.landmark, customer.data.phone, customer.data.order, customer.data.note] = lines;
-          reply = `✅ Order confirmed for ${customer.name}!\n🛵 Delivery to: ${customer.data.address}, near ${customer.data.landmark}.\n📞 Contact: ${customer.data.phone}\n💌 Cup note: \"${customer.data.note}\"`;
-          complete = true;
-        } else {
-          reply = "⚠️ Please send all the requested details in the format provided.";
-        }
-
-        if (complete) {
-          customer.stamps += 1;
-          customer.step = 0;
-
-          if (customer.stamps === 3) reply += "\n🎉 You’ve earned a FREE topping on your next order!";
-          else if (customer.stamps === 5) reply += "\n🎊 5 stamps! Enjoy 5% off your next order!";
-          else if (customer.stamps === 8) reply += "\n💪 8 stamps! Keep going — you’re close to a reward!";
-          else if (customer.stamps === 10) reply += "\n🌟 10 stamps! Your next (11th) drink is FREE! 🎁";
-
-          reply += "\n\n🔥 Would you like to add a soft serve, waffle, or seasonal topping to your order?";
-        }
-      } else if (customer.name) {
-        reply = `Welcome back ${customer.name}! 👋\nWould you like to:\n- Order to Car 🚗\n- Pick Up 🏃‍♀️\n- Delivery 🛵\nOr just type *menu* to see what’s new 🍓`;
-        customer.step = 0;
+    if (lower === "repeat" && lastOrder[from]) {
+      response = `Reordering your last: ${lastOrder[from].summary}
+Would you like to pay now or on arrival?`;
+      user.state = "awaiting_payment_option";
+    } else if (["menu", "catalog"].some(k => lower.includes(k))) {
+      response = `Here’s our menu! 🧋✨
+${CATALOG_LINK}
+Would you like:
+- Order to Car 🚗
+- Pick Up 🏃‍♀️
+- Delivery 🛵`;
+      user.state = "awaiting_order_type";
+    } else if (["order to car", "pickup", "pick up", "delivery"].some(k => lower.includes(k))) {
+      if (lower.includes("order to car")) {
+        user.orderType = "car";
+        response = "Please confirm, are you parked outside or still on the way? 🚗";
+        user.state = "awaiting_arrival";
+      } else if (lower.includes("pickup")) {
+        user.orderType = "pickup";
+        response = "Great! Please send:
+1. Name
+2. Order
+3. Pickup Branch
+4. Custom Note 💌";
+        user.state = "collecting_info";
+      } else if (lower.includes("delivery")) {
+        user.orderType = "delivery";
+        response = "Sweet! Please send:
+1. Name
+2. Address
+3. Landmark
+4. Phone Number
+5. Order
+6. Cup Note 💌";
+        user.state = "collecting_info";
+      }
+    } else if (user.state === "awaiting_arrival") {
+      if (lower.includes("on the way")) {
+        response = "Thanks! Let us know when you arrive so we can start prepping your drink to keep it icy-fresh 🧊";
+        user.state = "waiting_for_parked";
       } else {
-        reply = "Hi there! I’m your Boba Chummy assistant 🧋. Want to see the menu? Type *menu* or choose:\n- Order to Car\n- Pick Up\n- Delivery";
+        response = "Awesome! Please send:
+1. Name
+2. Car Color
+3. Plate Number
+4. Order
+5. Cup Note 💌";
+        user.state = "collecting_info";
       }
+    } else if (user.state === "waiting_for_parked" && lower.includes("i’m parked now")) {
+      response = "Thanks! Please send:
+1. Name
+2. Car Color
+3. Plate Number
+4. Order
+5. Cup Note 💌";
+      user.state = "collecting_info";
+    } else if (user.state === "collecting_info") {
+      const lines = text.split("
+");
+      const type = user.orderType;
 
-      customers[from] = customer;
-
-      try {
-        await axios.post(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
-          messaging_product: "whatsapp",
-          to: from,
-          text: { body: reply }
-        }, {
-          headers: {
-            Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-            "Content-Type": "application/json"
-          }
-        });
-      } catch (error) {
-        console.error("Reply failed:", error.response?.data || error.message);
+      if ((type === "car" && lines.length >= 5) || (type === "pickup" && lines.length >= 4) || (type === "delivery" && lines.length >= 6)) {
+        user.data = lines;
+        let branch = type === "delivery" || type === "car" ? "Guzape" : lines[2];
+        user.branch = branch;
+        if (type !== "pickup" && branch.toLowerCase() !== "guzape") {
+          response = "🚗 Delivery and Order to Car are only available at our Guzape Branch.
+Please switch to Pick Up or choose Guzape.";
+        } else {
+          response = "Would you like to add a soft serve, waffle, or seasonal topping? 🍦🥞
+Or just reply 'that's all'";
+          user.state = "cross_sell";
+        }
+      } else {
+        response = "Please make sure you follow the format correctly 🙏";
       }
+    } else if (user.state === "cross_sell") {
+      if (lower.includes("that's all")) {
+        let price = 5000; // placeholder
+        user.data.push(`₦${price}`);
+        response = `Your total is ₦${price}.
+Would you like to pay now or on arrival?`;
+        user.state = "awaiting_payment_option";
+      } else {
+        response = "Added! Anything else? Or reply 'that's all' to proceed.";
+      }
+    } else if (user.state === "awaiting_payment_option") {
+      if (lower.includes("arrival")) {
+        response = "Awesome! Please pay on delivery.
+We'll prep your order now 💛";
+        orders[from] = user;
+        lastOrder[from] = { summary: user.data.join(", "), type: user.orderType };
+        user.state = "ready";
+      } else {
+        const account = user.branch.toLowerCase().includes("guzape") ? GUZAPE_ACCOUNT : NILE_ACCOUNT;
+        response = `Please pay to:
+${account}
+Send your payment proof here 🧾`;
+        user.state = "awaiting_payment_proof";
+      }
+    } else if (user.state === "awaiting_payment_proof" && lower.includes("confirm")) {
+      response = `💖 Payment confirmed! Thank you, ${user.name}. Your order is now being prepped!
+You’ve earned a LOYAL-TEA stamp 🍵`;
+      user.stamps += 1;
+      if (user.stamps === 3) response += "
+Free topping on your next order! 🎉";
+      if (user.stamps === 5) response += "
+5% off your next order! 🎊";
+      if (user.stamps === 8) response += "
+Keep going — you’re close to a reward! 💪";
+      if (user.stamps === 10) response += "
+Next drink is FREE 🥳";
+      user.state = "ready";
+    } else if (["ready car", "ready pickup", "ready delivery"].some(k => lower.includes(k))) {
+      response = `Hey ${user.name}, your order is ready! Come grab your Boba joy now! 🧋💫`;
+    } else {
+      response = "👋 Welcome to Boba Chummy! Type *menu* to see our options or tell us what you'd like 🧋";
     }
+
+    customers[from] = user;
+    await sendWhatsApp(from, response);
   }
+
   res.sendStatus(200);
 });
 
