@@ -60,7 +60,7 @@ const LOYALTY_REWARDS = [
 ];
 
 app.post('/webhook', (req, res) => {
-  const msg    = req.body.message;
+  console.log('⏰ Incoming webhook payload:', JSON.stringify(req.body, null, 2));  const msg    = req.body.message;
   const userId = req.body.userId;
   if (!msg || !userId) return res.sendStatus(400);
 
