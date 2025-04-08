@@ -1,0 +1,199 @@
+{
+  "softServe": [
+    {
+      "name": "Orea Swirl",
+      "description": "Vanilla Soft serve w choco sauce & oreo",
+      "priceCone": 3800,
+      "priceCup": 4800
+    },
+    {
+      "name": "Lotus Dreams",
+      "description": "Vanilla soft serve w biscoff sauce & crumble",
+      "priceCone": 4800,
+      "priceCup": 5800
+    },
+    {
+      "name": "Dirty Boba",
+      "description": "Vanilla soft serve w brown sugar boba & brown sugar",
+      "priceCone": 3800,
+      "priceCup": 4800
+    },
+    {
+      "name": "Dark Delight",
+      "description": "Chocolate soft serve w chocolate sauce and chocolate chips",
+      "priceCone": 3800,
+      "priceCup": 4800
+    },
+    {
+      "name": "Berry Twist",
+      "description": "Vanilla soft serve w strawberries & chocolate sauce",
+      "priceCone": 3800,
+      "priceCup": 4800
+    },
+    {
+      "name": "Sweet Harmony",
+      "description": "Mixed soft serve w chocolate sauce and strawberries",
+      "priceCone": 3800,
+      "priceCup": 4800
+    },
+    {
+      "name": "Plain",
+      "description": "Vanilla, chocolate or mixed soft serve",
+      "priceCone": 2500,
+      "priceCup": 3500
+    }
+  ],
+  "greasyStickyTea": [
+    {
+      "name": "Lemonade",
+      "price": 4800
+    },
+    {
+      "name": "Passion Iced Tea",
+      "price": 4800
+    },
+    {
+      "name": "Orange Iced Tea",
+      "price": 4800
+    },
+    {
+      "name": "Watermelon Iced Tea",
+      "price": 4800
+    },
+    {
+      "name": "Blueberry Soda Splash",
+      "price": 5800
+    },
+    {
+      "name": "Strawberry Soda Splash",
+      "price": 5800
+    },
+    {
+      "name": "Mango Mint Charger",
+      "price": 5800
+    }
+  ],
+  "fruitTea": [
+    {
+      "name": "Blueberry Dazzle",
+      "priceM": 3800,
+      "priceL": 5800
+    },
+    {
+      "name": "Strawberry Dazzle",
+      "priceM": 3800,
+      "priceL": 5800
+    },
+    {
+      "name": "Black Sugar Creamer",
+      "priceM": 3800,
+      "priceL": 5800
+    },
+    {
+      "name": "Chocolate Cream Splash",
+      "priceM": 3800,
+      "priceL": 5800
+    },
+    {
+      "name": "Oreo Cream Crumble",
+      "priceM": 4800,
+      "priceL": 5800
+    }
+  ],
+  "bobaChummyMilkTea": [
+    {
+      "name": "Boba Chummy Milk Tea",
+      "priceM": 4800,
+      "priceL": 5800
+    },
+    {
+      "name": "Jasmine Milk Tea",
+      "priceM": 4800,
+      "priceL": 5800
+    },
+    {
+      "name": "Milky Way Frappe",
+      "priceM": 5800,
+      "priceL": 6800
+    },
+    {
+      "name": "Milky Way Frappe w Cake Cream",
+      "priceM": 6800,
+      "priceL": 7800
+    }
+  ],
+  "toppings": [
+    {
+      "name": "Boba Pearls",
+      "price": 1500
+    },
+    {
+      "name": "Lotus",
+      "price": 2500
+    },
+    {
+      "name": "Strawberry Jam",
+      "price": 1800
+    },
+    {
+      "name": "Cake Cream",
+      "price": 1800
+    },
+    {
+      "name": "Oreo",
+      "price": 1500
+    },
+    {
+      "name": "Blueberry Jam",
+      "price": 1800
+    },
+    {
+      "name": "Waffle Bits",
+      "price": 1500
+    },
+    {
+      "name": "Matcha paste",
+      "price": 1500
+    },
+    {
+      "name": "Black Sugar",
+      "price": 1500
+    },
+    {
+      "name": "Ice Cream",
+      "price": 2000
+    }
+  ],
+  "coffee": [
+    {
+      "name": "Caramel Latte",
+      "priceM": 4800,
+      "priceL": 5800
+    },
+    {
+      "name": "Chocolate Coffee Creamer",
+      "priceM": 4800,
+      "priceL": 5800
+    },
+    {
+      "name": "Americano",
+      "priceM": 4800,
+      "priceL": 5800
+    },
+    {
+      "name": "Blueberry Latte",
+      "priceM": 4800,
+      "priceL": 5800
+    }
+  ],
+  "bubbleWaffle": [
+    {
+      "name": "Bubble Waffle",
+      "price": 8100
+    },
+    {
+      "name": "Bubble Waffle (Large)",
+      "price": 9100
+    }
+  ]
+}
