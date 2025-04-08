@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const fetch = require('node-fetch').default;
+const fetch = require('node-fetch').default; // fixed import for node-fetch default export
 const app = express();
 app.use(bodyParser.json());
 
