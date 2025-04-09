@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 require('dotenv').config();
+const fetch = require('node-fetch');
 const app = express();
 app.use(bodyParser.json());
 
@@ -70,7 +71,8 @@ app.post('/webhook', async (req, res) => {
 
   if (user.step === 'greet') {
     user.step = 'chooseBranch';
-    return await sendWhatsApp(from, `${greeting} and welcome to Boba Chummy 🧋!\nWhich branch would you like to order from — Guzape or Nile Uni?`);
+    return await sendWhatsApp(from, `${greeting} and welcome to Boba Chummy 🧋!
+Which branch would you like to order from — Guzape or Nile Uni?`);
   }
 
   if (user.step === 'chooseBranch') {
@@ -80,7 +82,9 @@ app.post('/webhook', async (req, res) => {
 
     if (!isBranchOpen(user.branch)) {
       const hours = user.branch === 'Guzape' ? '9:00am - 10:00pm daily' : '10:00am - 6:30pm (closed on Sundays)';
-      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.\nOpen hours: ${hours}\nCheck our menu here: https://bobachummy.com/menu 📋\nYou can order during opening hours.`);
+      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.
+Open hours: ${hours}
+Menu: https://bobachummy.com/menu 📋`);
     }
 
     user.step = 'chooseOrderType';
@@ -93,7 +97,7 @@ app.post('/webhook', async (req, res) => {
       return await sendWhatsApp(from, `🚗 What's your car plate number? Are you parked outside or on the way?`);
     } else if (/delivery/i.test(text)) {
       if (user.branch === 'Nile Uni') {
-        return await sendWhatsApp(from, `🚫 Delivery is only available at our Guzape branch. Want to switch to Guzape? 🛵`);
+        return await sendWhatsApp(from, `🚫 Delivery is only available at Guzape branch. Want to switch to Guzape? 🛵`);
       }
       user.step = 'orderDetails';
       return await sendWhatsApp(from, `What would you like to order today? 🍹`);
@@ -109,7 +113,7 @@ app.post('/webhook', async (req, res) => {
       user.step = 'orderDetails';
       return await sendWhatsApp(from, `Perfect! What would you like to order today? 🚗🍹`);
     } else {
-      return await sendWhatsApp(from, `Got it! When you arrive, type "parked outside" so we can prepare your drink fresh.`);
+      return await sendWhatsApp(from, `Thanks! When you arrive, type "parked outside" so we can prepare your drink fresh.`);
     }
   }
 
@@ -136,4 +140,3 @@ app.post('/webhook', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Webhook running on port ${PORT}`));
-
