@@ -63,14 +63,15 @@ app.post('/webhook', async (req, res) => {
 
   let user = users.get(from);
   if (!user) {
-    user = { step: 'greet' };
+    user = { step: 'greet', greeted: false };
     users.set(from, user);
   }
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning ☀️' : hour < 17 ? 'Good afternoon 🌤️' : 'Good evening 🌙';
 
-  if (user.step === 'greet') {
+  if (user.step === 'greet' && !user.greeted) {
+    user.greeted = true;
     user.step = 'chooseBranch';
     return await sendWhatsApp(from, `${greeting} and welcome to Boba Chummy 🧋!\nWhich branch would you like to order from — Guzape or Nile Uni?`);
   }
