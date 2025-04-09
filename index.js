@@ -14,10 +14,10 @@ function isBranchOpen(branch) {
   const timeInMinutes = hour * 60 + minute;
 
   if (branch === 'Guzape') {
-    return timeInMinutes >= 540 && timeInMinutes <= 1320; // 9:00am - 10:00pm
+    return timeInMinutes >= 540 && timeInMinutes <= 1320;
   } else if (branch === 'Nile Uni') {
-    if (day === 0) return false; // Sunday
-    return timeInMinutes >= 600 && timeInMinutes <= 1110; // 10:00am - 6:30pm
+    if (day === 0) return false;
+    return timeInMinutes >= 600 && timeInMinutes <= 1110;
   }
   return false;
 }
@@ -80,7 +80,7 @@ app.post('/webhook', async (req, res) => {
 
     if (!isBranchOpen(user.branch)) {
       const hours = user.branch === 'Guzape' ? '9:00am - 10:00pm daily' : '10:00am - 6:30pm (closed on Sundays)';
-      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.\nOpen hours: ${hours}\nCheck our menu here: https://bobachummy.com/menu 📋\nFeel free to place your order when we're open.`);
+      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.\nOpen hours: ${hours}\nCheck our menu here: https://bobachummy.com/menu 📋\nYou can order during opening hours.`);
     }
 
     user.step = 'chooseOrderType';
@@ -131,7 +131,7 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  return res.sendStatus(200); // Stop bot from responding unnecessarily
+  return res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
