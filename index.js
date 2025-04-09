@@ -79,7 +79,11 @@ Which branch would you like to order from — Guzape or Nile Uni?`);
     else return await sendWhatsApp(from, `Please select a branch: Guzape or Nile Uni.`);
 
     if (!isBranchOpen(user.branch)) {
-      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed. Please reach us during open hours.`);
+      const hours = user.branch === 'Guzape' ? '9:00am - 10:00pm daily' : '10:00am - 6:30pm (closed on Sundays)';
+      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.
+Open hours: ${hours}
+Check our menu here: https://bobachummy.com/menu 📋
+Feel free to place your order when we're open.`);
     }
 
     user.step = 'chooseOrderType';
@@ -125,9 +129,12 @@ Which branch would you like to order from — Guzape or Nile Uni?`);
     if (!text.match(/tea|waffle|ice cream|ramen|cone|combo/i)) {
       return await sendWhatsApp(from, `Here’s our menu to help you decide: https://bobachummy.com/menu 📋`);
     } else {
+      user.step = 'complete';
       return await sendWhatsApp(from, `Thanks! We'll send your total and payment info shortly 💸`);
     }
   }
+
+  if (user.step === 'complete') return res.sendStatus(200);
 
   return await sendWhatsApp(from, `🤖 I'm not sure how to help with that. Type "menu" to see what we offer or restart by choosing a branch.`);
 });
