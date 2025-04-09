@@ -78,11 +78,13 @@ app.post('/webhook', async (req, res) => {
   if (user.step === 'chooseBranch') {
     if (/guzape/i.test(text)) user.branch = 'Guzape';
     else if (/nile/i.test(text)) user.branch = 'Nile Uni';
-    else return await sendWhatsApp(from, `Please select a branch: Guzape or Nile Uni.`);
+    else return res.sendStatus(200);
 
     if (!isBranchOpen(user.branch)) {
       const hours = user.branch === 'Guzape' ? '9:00am - 10:00pm daily' : '10:00am - 6:30pm (closed on Sundays)';
-      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.\nOpen hours: ${hours}\nCheck our menu here: https://bobachummy.com/menu 📋\nFeel free to place your order when we're open.`);
+      await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed.\nOpen hours: ${hours}\nCheck our menu here: https://bobachummy.com/menu 📋`);
+      users.delete(from);
+      return res.sendStatus(200);
     }
 
     user.step = 'chooseOrderType';
@@ -126,14 +128,14 @@ app.post('/webhook', async (req, res) => {
 
   if (user.step === 'orderDetails') {
     if (!text.match(/tea|waffle|ice cream|ramen|cone|combo/i)) {
-      return await sendWhatsApp(from, `Here’s our menu to help you decide: https://bobachummy.com/menu 📋`);
+      return res.sendStatus(200); // Quiet fallback
     } else {
       user.step = 'complete';
       return await sendWhatsApp(from, `Thanks! We'll send your total and payment info shortly 💸`);
     }
   }
 
-  return res.sendStatus(200); // Stop bot from responding unnecessarily
+  return res.sendStatus(200); // Do not respond to unexpected messages
 });
 
 const PORT = process.env.PORT || 3000;
