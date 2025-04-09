@@ -5,10 +5,6 @@ const app = express();
 app.use(bodyParser.json());
 
 const users = new Map();
-const bankAccounts = {
-  "Guzape": "🏦 Moniepoint - 5985829218",
-  "Nile Uni": "🏦 Moniepoint - 5775651915"
-};
 
 function isBranchOpen(branch) {
   const now = new Date();
@@ -55,7 +51,7 @@ app.post('/webhook', async (req, res) => {
   const change = entry?.changes?.[0];
   const msg = change?.value?.messages?.[0];
   const from = msg?.from;
-  const text = msg?.text?.body || '';
+  const text = msg?.text?.body.trim() || '';
 
   if (!msg || !from) {
     console.warn('⚠️ No message or phone number found in webhook payload.');
@@ -64,148 +60,76 @@ app.post('/webhook', async (req, res) => {
 
   let user = users.get(from);
   if (!user) {
-    user = {
-      name: null,
-      branch: null,
-      orderType: null,
-      lastOrder: [],
-      orders: [],
-      step: 'chooseBranch',
-      stamps: 0
-    };
+    user = { step: 'greet' };
     users.set(from, user);
   }
 
-  if (user.step === 'chooseBranch') {
-    if (/guzape/i.test(text)) {
-      user.branch = 'Guzape';
-    } else if (/nile/i.test(text)) {
-      user.branch = 'Nile Uni';
-    }
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning ☀️' : hour < 17 ? 'Good afternoon 🌤️' : 'Good evening 🌙';
 
-    if (!user.branch) {
-      return await sendWhatsApp(from, 'Welcome to Boba Chummy 🧋! Which branch would you like to order from — Guzape or Nile Uni?');
-    }
+  if (user.step === 'greet') {
+    user.step = 'chooseBranch';
+    return await sendWhatsApp(from, `${greeting} and welcome to Boba Chummy 🧋!
+Which branch would you like to order from — Guzape or Nile Uni?`);
+  }
+
+  if (user.step === 'chooseBranch') {
+    if (/guzape/i.test(text)) user.branch = 'Guzape';
+    else if (/nile/i.test(text)) user.branch = 'Nile Uni';
+    else return await sendWhatsApp(from, `Please select a branch: Guzape or Nile Uni.`);
 
     if (!isBranchOpen(user.branch)) {
-      return await sendWhatsApp(
-        from,
-        `⏰ Our ${user.branch} branch is currently closed.
-Would you like to schedule your order or check our catalog? 📒`
-      );
+      return await sendWhatsApp(from, `⏰ Our ${user.branch} branch is currently closed. Please reach us during open hours.`);
     }
 
-    user.step = 'getOrderType';
-    return await sendWhatsApp(from, `Awesome! Will this be for 🚗 Order to Car, 🛵 Delivery, or 🤝 Pickup?`);
+    user.step = 'chooseOrderType';
+    return await sendWhatsApp(from, `Would you like 🚗 Order to Car, 🛵 Delivery, or 🤝 Pickup?`);
   }
 
-  if (user.step === 'getOrderType') {
+  if (user.step === 'chooseOrderType') {
     if (/car/i.test(text)) {
-      user.orderType = 'Order to Car';
+      user.step = 'carDetails';
+      return await sendWhatsApp(from, `🚗 What's your car plate number? Are you parked outside or on the way?`);
     } else if (/delivery/i.test(text)) {
       if (user.branch === 'Nile Uni') {
-        return await sendWhatsApp(from, `🚫 Delivery is only available at our Guzape branch.
-Would you like to switch to Guzape? We deliver anywhere in Abuja! 🛵`);
+        return await sendWhatsApp(from, `🚫 Delivery is only available at our Guzape branch. Want to switch to Guzape? 🛵`);
       }
-      user.orderType = 'Delivery';
+      user.step = 'orderDetails';
+      return await sendWhatsApp(from, `What would you like to order today? 🍹`);
     } else if (/pickup/i.test(text)) {
-      user.orderType = 'Pickup';
+      user.step = 'pickupDetails';
+      return await sendWhatsApp(from, `🤝 Will you pick up now or later? Type "now" or "later".`);
     }
-
-    if (!user.orderType) {
-      return await sendWhatsApp(from, 'Please choose one: 🚗 Order to Car, 🛵 Delivery, or 🤝 Pickup.');
-    }
-
-    user.step = 'getName';
-    return await sendWhatsApp(from, `Great! What name should we put the order under? 😊`);
+    return await sendWhatsApp(from, `Please choose a valid order type: 🚗 Order to Car, 🛵 Delivery, or 🤝 Pickup.`);
   }
 
-  if (user.step === 'getName') {
-    user.name = text;
-    user.step = 'getCustomNote';
-    return await sendWhatsApp(from, `Would you like a special note printed on your cup? ✍️ (Say "no" to skip)`);
-  }
-
-  if (user.step === 'getCustomNote') {
-    user.customNote = /no/i.test(text) ? null : text;
-    user.step = user.orderType === 'Pickup' ? 'pickupTime' : user.orderType === 'Order to Car' ? 'arrivalStatus' : 'startOrder';
-
-    if (user.step === 'pickupTime') {
-      return await sendWhatsApp(from, `⏰ Will you be picking up your order now or later? (Reply with "now" or "later")`);
-    }
-
-    if (user.step === 'arrivalStatus') {
-      return await sendWhatsApp(from, `🚗 Are you at the car park now or on the way? (Reply with "at the park" or "on the way")`);
-    }
-
-    return await sendWhatsApp(from, `What would you like to order today? 🍹`);
-  }
-
-  if (user.step === 'pickupTime') {
-    if (/later/i.test(text)) {
-      user.awaitingReady = true;
-      return await sendWhatsApp(from, `Great! When you're ready, just type "coming now" so we can start preparing it fresh! 🧋`);
-    }
-    user.step = 'startOrder';
-    return await sendWhatsApp(from, `Awesome! What would you like to order? 🍡`);
-  }
-
-  if (user.step === 'arrivalStatus') {
-    if (/on the way/i.test(text)) {
-      user.awaitingHere = true;
-      return await sendWhatsApp(from, `Cool! Send "I'm at the park" once you arrive so we can start your order fresh 🧃`);
-    }
-    user.step = 'startOrder';
-    return await sendWhatsApp(from, `Great! What would you like to order? 🍵`);
-  }
-
-  if (user.step === 'startOrder') {
-    user.orders.push(text);
-    user.step = 'crossSell';
-    return await sendWhatsApp(from, `Would you like to add waffles 🧇, toppings 🍓, or combos 🍹? If not, type "that's all".`);
-  }
-
-  if (user.step === 'crossSell') {
-    if (/that's all|no|done/i.test(text)) {
-      user.lastOrder = [...user.orders];
-      user.step = 'awaitingTotal';
-      return await sendWhatsApp(from, `👍 Got it! We’re calculating your total and will send payment info shortly.`);
+  if (user.step === 'carDetails') {
+    if (/parked/i.test(text)) {
+      user.step = 'orderDetails';
+      return await sendWhatsApp(from, `Perfect! What would you like to order today? 🚗🍹`);
     } else {
-      user.orders.push(text);
-      return await sendWhatsApp(from, `Added "${text}". Anything else? (Type "that's all" when done)`);
+      return await sendWhatsApp(from, `Got it! When you arrive, type "parked outside" so we can prepare your drink fresh.`);
     }
   }
 
-  if (user.step === 'awaitingTotal' && /total/i.test(text)) {
-    user.step = 'awaitingPayment';
-    return await sendWhatsApp(from,
-      `💳 Your total is ready! Please make payment to:
-${bankAccounts[user.branch]}
-
-Send a screenshot or "I’ve paid" once done. 💸`
-    );
+  if (user.step === 'pickupDetails') {
+    if (/now/i.test(text)) {
+      user.step = 'orderDetails';
+      return await sendWhatsApp(from, `What would you like to order today? 🤝🍹`);
+    } else {
+      return await sendWhatsApp(from, `No problem! When you're on your way, just type "coming now" 🧋`);
+    }
   }
 
-  if (user.step === 'awaitingPayment' && /paid|proof|screenshot/i.test(text)) {
-    user.step = 'waitConfirm';
-    return await sendWhatsApp(from, `🕵️ Waiting for our staff to confirm your payment... Hang tight! 🧾`);
+  if (user.step === 'orderDetails') {
+    if (!text.match(/tea|waffle|ice cream|ramen|cone|combo/i)) {
+      return await sendWhatsApp(from, `Here’s our menu to help you decide: https://bobachummy.com/menu 📋`);
+    } else {
+      return await sendWhatsApp(from, `Thanks! We'll send your total and payment info shortly 💸`);
+    }
   }
 
-  if (user.step === 'waitConfirm' && /confirm/i.test(text)) {
-    user.step = 'complete';
-    user.stamps += 1;
-    const eta = user.orderType === 'Delivery' ? '🛵 Your order will be delivered shortly!' :
-                 user.orderType === 'Pickup' ? '🤝 Ready for pickup soon!' :
-                 '🚗 Get ready to receive your Boba at the car park!';
-    return await sendWhatsApp(from,
-      `🎉 Payment confirmed!
-Thanks ${user.name}! ${eta}
-
-🌟 You earned a LOYAL-TEA stamp! Total: ${user.stamps}`
-    );
-  }
-
-  res.sendStatus(200);
+  return await sendWhatsApp(from, `🤖 I'm not sure how to help with that. Type "menu" to see what we offer or restart by choosing a branch.`);
 });
 
 const PORT = process.env.PORT || 3000;
